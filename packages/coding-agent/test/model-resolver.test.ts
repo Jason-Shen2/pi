@@ -255,6 +255,58 @@ describe("resolveModelScopeWithDiagnostics", () => {
 			warn.mockRestore();
 		}
 	});
+
+	test("exact-matches model IDs containing literal brackets before glob fallback", async () => {
+		const bracketedModel: Model<"anthropic-messages"> = {
+			id: "bracketed-model[1m]",
+			name: "Bracketed Model",
+			api: "anthropic-messages",
+			provider: "custom",
+			baseUrl: "https://example.invalid",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
+			contextWindow: 128000,
+			maxTokens: 8192,
+		};
+		const modelsWithBracket = [...allModels, bracketedModel];
+		const registry = {
+			getAvailable: () => modelsWithBracket,
+		} as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
+
+		const result = await resolveModelScopeWithDiagnostics(["custom/bracketed-model[1m]"], registry);
+
+		expect(result.scopedModels).toHaveLength(1);
+		expect(result.scopedModels[0].model.id).toBe("bracketed-model[1m]");
+		expect(result.scopedModels[0].model.provider).toBe("custom");
+		expect(result.diagnostics).toHaveLength(0);
+	});
+
+	test("exact-matches bare model IDs containing literal brackets with thinking level", async () => {
+		const bracketedModel: Model<"anthropic-messages"> = {
+			id: "bracketed-model[1m]",
+			name: "Bracketed Model",
+			api: "anthropic-messages",
+			provider: "custom",
+			baseUrl: "https://example.invalid",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 1, output: 2, cacheRead: 0.1, cacheWrite: 1 },
+			contextWindow: 128000,
+			maxTokens: 8192,
+		};
+		const modelsWithBracket = [...allModels, bracketedModel];
+		const registry = {
+			getAvailable: () => modelsWithBracket,
+		} as unknown as Parameters<typeof resolveModelScopeWithDiagnostics>[1];
+
+		const result = await resolveModelScopeWithDiagnostics(["custom/bracketed-model[1m]:high"], registry);
+
+		expect(result.scopedModels).toHaveLength(1);
+		expect(result.scopedModels[0].model.id).toBe("bracketed-model[1m]");
+		expect(result.scopedModels[0].thinkingLevel).toBe("high");
+		expect(result.diagnostics).toHaveLength(0);
+	});
 });
 
 describe("resolveCliModel", () => {

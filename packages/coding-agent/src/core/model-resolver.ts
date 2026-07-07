@@ -275,13 +275,14 @@ export async function resolveModelScopeWithDiagnostics(
 	const diagnostics: ModelScopeDiagnostic[] = [];
 
 	for (const pattern of patterns) {
-		// Check if pattern contains glob characters
-		if (pattern.includes("*") || pattern.includes("?") || pattern.includes("[")) {
-			// Extract optional thinking level suffix (e.g., "provider/*:high")
-			const colonIdx = pattern.lastIndexOf(":");
+		const hasGlobWildcard = pattern.includes("*") || pattern.includes("?");
+		const hasBracket = pattern.includes("[");
+
+		if (hasGlobWildcard || hasBracket) {
 			let globPattern = pattern;
 			let thinkingLevel: ThinkingLevel | undefined;
 
+			const colonIdx = pattern.lastIndexOf(":");
 			if (colonIdx !== -1) {
 				const suffix = pattern.substring(colonIdx + 1);
 				if (isValidThinkingLevel(suffix)) {
@@ -290,8 +291,16 @@ export async function resolveModelScopeWithDiagnostics(
 				}
 			}
 
-			// Match against "provider/modelId" format OR just model ID
-			// This allows "*sonnet*" to match without requiring "anthropic/*sonnet*"
+			if (hasBracket && !hasGlobWildcard) {
+				const exactMatch = findExactModelReferenceMatch(globPattern, availableModels);
+				if (exactMatch) {
+					if (!scopedModels.find((sm) => modelsAreEqual(sm.model, exactMatch))) {
+						scopedModels.push({ model: exactMatch, thinkingLevel });
+					}
+					continue;
+				}
+			}
+
 			const matchingModels = availableModels.filter((m) => {
 				const fullId = `${m.provider}/${m.id}`;
 				return minimatch(fullId, globPattern, { nocase: true }) || minimatch(m.id, globPattern, { nocase: true });

@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { delimiter } from "node:path";
+import { delimiter, join } from "node:path";
 import { spawn, spawnSync } from "child_process";
 import { getBinDir } from "../config.ts";
 
@@ -199,15 +199,18 @@ export function killTrackedDetachedChildren(): void {
  */
 export function killProcessTree(pid: number): void {
 	if (process.platform === "win32") {
-		// Use taskkill on Windows to kill process tree
+		const taskkillPath = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "taskkill.exe");
 		try {
-			spawn("taskkill", ["/F", "/T", "/PID", String(pid)], {
+			const child = spawn(taskkillPath, ["/F", "/T", "/PID", String(pid)], {
 				stdio: "ignore",
 				detached: true,
 				windowsHide: true,
 			});
+			child.on("error", () => {
+				// Ignore errors if taskkill fails.
+			});
 		} catch {
-			// Ignore errors if taskkill fails
+			// Ignore errors if taskkill fails.
 		}
 	} else {
 		// Use SIGKILL on Unix/Linux/Mac

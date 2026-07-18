@@ -29,35 +29,47 @@ export function isNewerPackageVersion(candidateVersion: string, currentVersion: 
 
 export async function getLatestPiRelease(
 	currentVersion: string,
-	options: { timeoutMs?: number } = {},
+	options: { timeoutMs?: number; retries?: number } = {},
 ): Promise<LatestPiRelease | undefined> {
 	if (process.env.PI_SKIP_VERSION_CHECK || process.env.PI_OFFLINE) return undefined;
 
-	const response = await fetch(LATEST_VERSION_URL, {
-		headers: {
-			"User-Agent": getPiUserAgent(currentVersion),
-			accept: "application/json",
-		},
-		signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_VERSION_CHECK_TIMEOUT_MS),
-	});
-	if (!response.ok) return undefined;
+	const maxRetries = options.retries ?? 0;
+	let lastError: unknown;
+	for (let attempt = 0; attempt <= maxRetries; attempt++) {
+		try {
+			const response = await fetch(LATEST_VERSION_URL, {
+				headers: {
+					"User-Agent": getPiUserAgent(currentVersion),
+					accept: "application/json",
+				},
+				signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULT_VERSION_CHECK_TIMEOUT_MS),
+			});
+			if (!response.ok) return undefined;
 
-	const data = (await response.json()) as {
-		packageName?: unknown;
-		version?: unknown;
-		note?: unknown;
-	};
-	if (typeof data.version !== "string" || !data.version.trim()) {
-		return undefined;
+			const data = (await response.json()) as {
+				packageName?: unknown;
+				version?: unknown;
+				note?: unknown;
+			};
+			if (typeof data.version !== "string" || !data.version.trim()) {
+				return undefined;
+			}
+			const packageName =
+				typeof data.packageName === "string" && data.packageName.trim() ? data.packageName.trim() : undefined;
+			const note = typeof data.note === "string" && data.note.trim() ? data.note.trim() : undefined;
+			return {
+				version: data.version.trim(),
+				packageName,
+				...(note ? { note } : {}),
+			};
+		} catch (error) {
+			lastError = error;
+			if (attempt < maxRetries) {
+				await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+			}
+		}
 	}
-	const packageName =
-		typeof data.packageName === "string" && data.packageName.trim() ? data.packageName.trim() : undefined;
-	const note = typeof data.note === "string" && data.note.trim() ? data.note.trim() : undefined;
-	return {
-		version: data.version.trim(),
-		packageName,
-		...(note ? { note } : {}),
-	};
+	throw lastError;
 }
 
 export async function getLatestPiVersion(

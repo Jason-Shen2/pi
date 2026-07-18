@@ -88,4 +88,29 @@ describe("version checks", () => {
 		await expect(getLatestPiVersion("1.2.3")).resolves.toBeUndefined();
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
+
+	it("retries once on transient fetch failure when retries option is set", async () => {
+		let callCount = 0;
+		const fetchMock = vi.fn(async () => {
+			callCount++;
+			if (callCount === 1) {
+				throw new Error("fetch failed");
+			}
+			return Response.json({ version: "1.2.4" });
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(getLatestPiRelease("1.2.3", { retries: 1 })).resolves.toEqual({ version: "1.2.4" });
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("does not retry by default (startup version check path)", async () => {
+		const fetchMock = vi.fn(async () => {
+			throw new Error("fetch failed");
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(getLatestPiRelease("1.2.3")).rejects.toThrow("fetch failed");
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
 });

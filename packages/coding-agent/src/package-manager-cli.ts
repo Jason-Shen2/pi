@@ -475,7 +475,7 @@ interface SelfUpdatePlan {
 async function getSelfUpdatePlan(force: boolean): Promise<SelfUpdatePlan> {
 	let latestRelease: Awaited<ReturnType<typeof getLatestPiRelease>>;
 	try {
-		latestRelease = await getLatestPiRelease(VERSION);
+		latestRelease = await getLatestPiRelease(VERSION, { retries: 1 });
 	} catch (error: unknown) {
 		const message = error instanceof Error ? error.message : String(error);
 		throw new Error(`Could not determine latest ${APP_NAME} version: ${message}`);
